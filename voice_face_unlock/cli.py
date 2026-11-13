@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -97,7 +98,7 @@ def cmd_test(cfg: Config, args) -> None:
 
 
 def cmd_run(cfg: Config, args) -> None:
-    from . import system
+    from . import system, tts
     from .face import FaceCheck, save_intruder
     from .guard import Guard
     from .voice import PhraseListener, SpeakerCheck
@@ -128,14 +129,12 @@ def cmd_run(cfg: Config, args) -> None:
                 guard.success()
                 system.unlock(sid)
                 log.info("UNLOCKED")
-                system.say(cfg.say_success, cfg.speak)
+                time.sleep(0.6)  # let GNOME finish the unlock animation
+                subprocess.run([sys.executable, "-m", "voice_face_unlock.intro"], check=False)
             else:
                 photo = save_intruder(cfg)
                 log.warning("DENIED (voice %.2f). intruder photo: %s", v, photo)
-                if guard.fail():
-                    system.say(cfg.say_cooldown, cfg.speak)
-                else:
-                    system.say(cfg.say_denied, cfg.speak)
+                tts.speak(cfg, cfg.say_cooldown if guard.fail() else cfg.say_denied)
     finally:
         fc.close()
 
@@ -151,13 +150,15 @@ def main(argv=None) -> None:
     s = sub.add_parser("snapshot", help="save one photo from each camera sensor")
     s.add_argument("--out", default=".")
     sub.add_parser("test", help="run all checks once without unlocking")
+    sub.add_parser("intro", help="preview the welcome animation + voice")
     sub.add_parser("run", help="run the unlock service")
     args = p.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cfg = config_mod.load()
     {"enroll-voice": cmd_enroll_voice, "enroll-face": cmd_enroll_face, "snapshot": cmd_snapshot,
-     "test": cmd_test, "run": cmd_run}[args.cmd](cfg, args)
+     "test": cmd_test, "run": cmd_run,
+     "intro": lambda cfg, args: __import__("voice_face_unlock.intro", fromlist=["main"]).main()}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":

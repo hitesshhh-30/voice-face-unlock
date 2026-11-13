@@ -39,8 +39,11 @@ class Config:
     max_failures: int = 3               # after this many failures...
     cooldown_s: float = 60.0            # ...voice unlock pauses this long
 
-    # Talk back
+    # Talk back + intro
     speak: bool = True
+    voice_model: str = "en_GB-alan-medium"   # Piper voice in models/ (falls back to spd-say)
+    boss_name: str = "boss"
+    intro_animation: bool = True
     say_success: str = "Impact confirmed. Ninja inside."
     say_denied: str = "Unknown entity. Face cached. Have a nice day."
     say_cooldown: str = "Too many attempts. Use your password."

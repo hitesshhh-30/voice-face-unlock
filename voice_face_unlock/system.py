@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import getpass
-import shutil
 import subprocess
 
 
@@ -25,11 +24,3 @@ def is_locked(sid: str) -> bool:
 def unlock(sid: str) -> None:
     subprocess.run(["loginctl", "unlock-session", sid], check=True)
 
-
-def say(text: str, enabled: bool = True) -> None:
-    if not enabled or not text:
-        return
-    if shutil.which("spd-say"):
-        subprocess.run(["spd-say", "-w", "-r", "-10", text], check=False)
-    else:
-        print(f"[say] {text}")
