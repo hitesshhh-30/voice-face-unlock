@@ -18,3 +18,4 @@ enroll/
 intro-video/renders/
 intro-video/.hyperframes/
 intro-video/node_modules/
+!assets/intro.wav
