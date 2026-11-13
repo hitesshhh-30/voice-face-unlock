@@ -24,6 +24,7 @@ from . import mixer, sysinfo, tts  # noqa: E402
 VIDEO = Path(__file__).resolve().parent.parent / "assets" / "intro.mp4"
 VOICE_AT_S = 6.3      # just after the impact (6.0 s) in the film
 MUSIC_DUCK = 0.3      # music level while the voice speaks
+AUDIO_LATENCY = "250ms"  # big audio buffer: no crackle while the video decodes
 
 
 def find_video(cfg) -> Path | None:
@@ -73,14 +74,14 @@ def play_video(path: Path, t0: float, keep_holding) -> None:
                 if shown == want:
                     ok, frame = cap.retrieve()
             if frame is not None:
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                if (rgb.shape[1], rgb.shape[0]) != (sw, sh):
-                    rgb = cv2.resize(rgb, (sw, sh), interpolation=cv2.INTER_AREA)
-                screen.blit(pygame.image.frombuffer(rgb.tobytes(), (sw, sh), "RGB"), (0, 0))
+                if (frame.shape[1], frame.shape[0]) != (sw, sh):
+                    frame = cv2.resize(frame, (sw, sh), interpolation=cv2.INTER_AREA)
+                # BGR straight from OpenCV, no colour conversion or copy (less CPU)
+                screen.blit(pygame.image.frombuffer(frame.data, (sw, sh), "BGR"), (0, 0))
                 pygame.display.flip()
             if done and not keep_holding():
                 return
-            clock.tick(120)
+            clock.tick(fps * 2)
     finally:
         cap.release()
         pygame.quit()
@@ -92,8 +93,12 @@ def main() -> None:
     video = find_video(cfg) if cfg.intro_animation else None
     track = build_soundtrack(cfg, video, line)
 
-    player = tts.play(track, line)
+    player = tts.play(track, line, latency=AUDIO_LATENCY)
     t0 = time.monotonic()
+    try:
+        os.nice(10)  # video yields the CPU to the sound player (it keeps normal priority)
+    except OSError:
+        pass
     try:
         if video:
             play_video(video, t0, lambda: bool(player) and player.poll() is None)

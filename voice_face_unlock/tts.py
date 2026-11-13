@@ -88,9 +88,10 @@ def synthesize(cfg: Config, text: str, cache: bool = False) -> Path | None:
     return None
 
 
-def play(wav: Path | None, text: str = "") -> subprocess.Popen | None:
+def play(wav: Path | None, text: str = "", latency: str | None = None) -> subprocess.Popen | None:
+    """latency: bigger PipeWire buffer (e.g. "250ms") so sound survives a busy CPU."""
     if wav and shutil.which("pw-play"):
-        cmd = ["pw-play", str(wav)]
+        cmd = ["pw-play", *([f"--latency={latency}"] if latency else []), str(wav)]
     elif wav and shutil.which("aplay"):
         cmd = ["aplay", "-q", str(wav)]
     elif text and shutil.which("spd-say"):
