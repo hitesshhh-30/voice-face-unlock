@@ -1,10 +1,14 @@
-"""Full-screen intro video after unlock, with the voice starting on the impact frame.
+"""Full-screen intro video after unlock.
+
+Voice + film sound are pre-mixed into ONE wav (music ducked under the voice) and
+the picture follows the wall clock started with that audio, so nothing drifts.
 Preview: voice-face-unlock intro.  Any key / click skips it."""
 from __future__ import annotations
 
 import os
 import sys
-import threading
+import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -15,11 +19,11 @@ import cv2  # noqa: E402
 import pygame  # noqa: E402
 
 from . import config as config_mod  # noqa: E402
-from . import sysinfo, tts  # noqa: E402
+from . import mixer, sysinfo, tts  # noqa: E402
 
 VIDEO = Path(__file__).resolve().parent.parent / "assets" / "intro.mp4"
 VOICE_AT_S = 6.3      # just after the impact (6.0 s) in the film
-MAX_EXTRA_HOLD_S = 6  # hold last frame at most this long waiting for the voice
+MUSIC_DUCK = 0.3      # music level while the voice speaks
 
 
 def find_video(cfg) -> Path | None:
@@ -29,8 +33,21 @@ def find_video(cfg) -> Path | None:
     return None
 
 
-def play_video(path: Path, on_time) -> None:
-    """Play the video full-screen; on_time(t) is called every frame."""
+def build_soundtrack(cfg, video: Path | None, line: str) -> Path | None:
+    """Voice (cached per line) mixed into the film sound. Falls back to whichever exists."""
+    voice = tts.synthesize(cfg, line, cache=True) if cfg.speak else None
+    music = video.with_suffix(".wav") if video else None
+    if not (music and music.exists()):
+        return voice
+    if not voice:
+        return music
+    out = Path(tempfile.mkstemp(suffix=".wav", prefix="vfu-intro-")[1])
+    mixer.mix(music, voice, VOICE_AT_S, out, duck=MUSIC_DUCK)
+    return out
+
+
+def play_video(path: Path, t0: float, keep_holding) -> None:
+    """Show the frame that belongs to (now - t0); hold the last frame while keep_holding()."""
     cap = cv2.VideoCapture(str(path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     pygame.init()
@@ -38,30 +55,32 @@ def play_video(path: Path, on_time) -> None:
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.NOFRAME)
     sw, sh = screen.get_size()
     clock = pygame.time.Clock()
-    last = None
-    frame_i = 0
+    shown = -1          # index of the frame currently on screen
+    done = False
     try:
         while True:
             for e in pygame.event.get():
                 if e.type in (pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
                     return
-            ok, frame = cap.read()
-            t = frame_i / fps
-            if not ok:
-                if not on_time(t, finished=True):
-                    return
-                frame = None
-            else:
-                frame_i += 1
-                on_time(t, finished=False)
+            want = int((time.monotonic() - t0) * fps)
+            frame = None
+            while not done and shown < want:      # catch up: drop frames if we're late
+                ok = cap.grab()
+                if not ok:
+                    done = True
+                    break
+                shown += 1
+                if shown == want:
+                    ok, frame = cap.retrieve()
+            if frame is not None:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 if (rgb.shape[1], rgb.shape[0]) != (sw, sh):
                     rgb = cv2.resize(rgb, (sw, sh), interpolation=cv2.INTER_AREA)
-                last = pygame.image.frombuffer(rgb.tobytes(), (sw, sh), "RGB")
-            if last is not None:
-                screen.blit(last, (0, 0))
+                screen.blit(pygame.image.frombuffer(rgb.tobytes(), (sw, sh), "RGB"), (0, 0))
                 pygame.display.flip()
-            clock.tick(fps)
+            if done and not keep_holding():
+                return
+            clock.tick(120)
     finally:
         cap.release()
         pygame.quit()
@@ -69,42 +88,32 @@ def play_video(path: Path, on_time) -> None:
 
 def main() -> None:
     cfg = config_mod.load()
-    bat = sysinfo.battery()
-    line = sysinfo.intro_line(cfg.boss_name, cfg.say_success, datetime.now(), bat)
-
-    # make the voice in the background while the video starts (hides network latency)
-    wav: dict = {}
-    maker = threading.Thread(target=lambda: wav.update(p=tts.synthesize(cfg, line)), daemon=True)
-    if cfg.speak:
-        maker.start()
-    state = {"player": None, "held": 0.0, "sfx": None}
-
-    def on_time(t: float, finished: bool) -> bool:
-        """Start the film's sound at frame 0 and the voice after the impact.
-        Returns True to keep holding the last frame."""
-        if state["sfx"] is None:
-            sfx = video.with_suffix(".wav") if video else None
-            state["sfx"] = tts.play(sfx) if sfx and sfx.exists() else False
-        if cfg.speak and state["player"] is None and t >= VOICE_AT_S:
-            maker.join(timeout=1.5)
-            state["player"] = tts.play(wav.get("p"), line) or False
-        if finished:
-            p = state["player"]
-            state["held"] += 1 / 30
-            return bool(p) and p.poll() is None and state["held"] < MAX_EXTRA_HOLD_S
-        return True
-
+    line = sysinfo.intro_line(cfg.boss_name, cfg.say_success, datetime.now(), sysinfo.battery())
     video = find_video(cfg) if cfg.intro_animation else None
+    track = build_soundtrack(cfg, video, line)
+
+    player = tts.play(track, line)
+    t0 = time.monotonic()
     try:
         if video:
-            play_video(video, on_time)
-        else:
-            on_time(VOICE_AT_S, finished=False)
+            play_video(video, t0, lambda: bool(player) and player.poll() is None)
     except pygame.error as e:
         print(f"intro video unavailable: {e}", file=sys.stderr)
-        on_time(VOICE_AT_S, finished=False)
-    if state["player"]:
-        state["player"].wait()
+    if player:
+        if video:
+            player.terminate()   # skipped or finished: stop sound with the picture
+        else:
+            player.wait()
+    if track and track.name.startswith("vfu-intro-"):
+        track.unlink(missing_ok=True)
+
+
+def warm_cache(cfg=None) -> None:
+    """Pre-make the greeting lines so the intro starts instantly."""
+    cfg = cfg or config_mod.load()
+    for hour in (8, 13, 19, 2):
+        line = sysinfo.intro_line(cfg.boss_name, cfg.say_success, datetime(2026, 1, 1, hour), (None, False))
+        tts.synthesize(cfg, line, cache=True)
 
 
 if __name__ == "__main__":

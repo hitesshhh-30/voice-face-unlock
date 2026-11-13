@@ -106,6 +106,11 @@ def cmd_run(cfg: Config, args) -> None:
     _need_enrollment(cfg)
     listener, speaker, fc = PhraseListener(cfg), SpeakerCheck(cfg), FaceCheck(cfg)
     guard = Guard(cfg.max_failures, cfg.cooldown_s)
+    if cfg.speak:  # pre-make greeting voices so the intro starts without a network wait
+        import threading
+
+        from .intro import warm_cache
+        threading.Thread(target=warm_cache, args=(cfg,), daemon=True).start()
     sid = system.session_id()
     log.info("ready (session %s). Waiting for the lock screen.", sid)
 
