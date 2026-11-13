@@ -32,6 +32,15 @@ def phrase_matches(heard: str, variants: list[str]) -> bool:
     return any(f" {normalize_text(v)} " in h for v in variants)
 
 
+def near_miss(heard: str, variants: list[str], min_words: int = 3) -> bool:
+    """Close to the phrase but not it, e.g. "the [unk] has landed" (3+ phrase words).
+    Unrelated talk gives "[unk]" or 1-2 words, so it stays silent."""
+    if phrase_matches(heard, variants):
+        return False
+    words = {w for v in variants for w in normalize_text(v).split()}
+    return len(set(normalize_text(heard).split()) & words) >= min_words
+
+
 def eye_aspect_ratio(pts: np.ndarray) -> float:
     """EAR from 6 eye points ordered: outer, top1, top2, inner, bottom2, bottom1."""
     p = np.asarray(pts, dtype=np.float32)

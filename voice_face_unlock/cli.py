@@ -117,6 +117,15 @@ def cmd_run(cfg: Config, args) -> None:
     def locked() -> bool:
         return system.is_locked(sid)
 
+    last_hint = [0.0]
+
+    def near_miss(text: str) -> None:
+        """Almost the phrase: say so (rate-limited, never counts as a failure)."""
+        log.info('near miss: "%s"', text)
+        if cfg.speak and time.monotonic() - last_hint[0] >= cfg.near_miss_gap_s:
+            last_hint[0] = time.monotonic()
+            tts.play(tts.synthesize(cfg, cfg.say_near_miss, cache=True), cfg.say_near_miss)  # don't block the mic
+
     try:
         while True:
             if not locked() or guard.blocked():
@@ -124,7 +133,7 @@ def cmd_run(cfg: Config, args) -> None:
                 continue
             log.info("screen locked: listening")
             with Mic() as mic:  # mic is only open while locked
-                pcm = listener.wait_for_phrase(mic, keep_going=locked)
+                pcm = listener.wait_for_phrase(mic, keep_going=locked, on_near_miss=near_miss)
             if pcm is None:
                 log.info("unlocked another way: mic off")
                 continue

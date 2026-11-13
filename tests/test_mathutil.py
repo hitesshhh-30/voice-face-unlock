@@ -54,3 +54,16 @@ def test_blink_static_photo_never_blinks():
 def test_blink_eyes_closed_whole_time_is_not_a_blink():
     b = BlinkDetector(closed=0.18, open_=0.24)
     assert not any(b.update(0.05) for _ in range(100))
+
+
+def test_near_miss_only_for_close_attempts():
+    from voice_face_unlock.config import Config
+    from voice_face_unlock.mathutil import near_miss
+    v = Config().phrase_variants
+    # real recogniser outputs measured for these spoken sentences
+    assert near_miss("the byte has [unk]", v)              # "the byte has arrived"
+    assert near_miss("the [unk] has landed", v)            # "the eagle has landed"
+    assert near_miss("hey the [unk] has landed", v)        # "hey the plane has landed"
+    assert not near_miss("hey the byte has landed", v)     # correct phrase
+    assert not near_miss("hey the [unk]", v)               # "hey there, how are you"
+    assert not near_miss("[unk]", v)                       # unrelated talk

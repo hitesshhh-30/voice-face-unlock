@@ -51,6 +51,8 @@ class Config:
     say_success: str = "Impact confirmed."
     say_denied: str = "Unknown entity. Face cached. Have a nice day."
     say_cooldown: str = "Too many attempts. Use your password."
+    say_near_miss: str = "Passphrase not recognised."
+    near_miss_gap_s: float = 10.0
     save_intruders: bool = True
 
     @property

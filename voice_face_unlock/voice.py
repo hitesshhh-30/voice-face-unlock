@@ -10,7 +10,7 @@ import vosk
 
 from .audio import RATE, Mic, to_float
 from .config import Config
-from .mathutil import best_match, phrase_matches
+from .mathutil import best_match, near_miss, phrase_matches
 
 MAX_UTTERANCE_S = 6
 
@@ -46,11 +46,15 @@ class PhraseListener:
                     yield text, bytes(buf)
                 buf.clear()
 
-    def wait_for_phrase(self, mic: Mic, keep_going: Callable[[], bool] = lambda: True) -> bytes | None:
-        """Audio of the utterance containing the phrase, or None if keep_going() turned False."""
+    def wait_for_phrase(self, mic: Mic, keep_going: Callable[[], bool] = lambda: True,
+                        on_near_miss: Callable[[str], None] | None = None) -> bytes | None:
+        """Audio of the utterance containing the phrase, or None if keep_going() turned False.
+        on_near_miss(text) is called for almost-right attempts (not counted as failures)."""
         for text, pcm in self.utterances(mic, keep_going):
             if phrase_matches(text, self.cfg.phrase_variants):
                 return pcm
+            if on_near_miss and near_miss(text, self.cfg.phrase_variants):
+                on_near_miss(text)
         return None
 
 

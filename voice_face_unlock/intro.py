@@ -119,6 +119,8 @@ def warm_cache(cfg=None) -> None:
     for hour in (8, 13, 19, 2):
         line = sysinfo.intro_line(cfg.boss_name, cfg.say_success, datetime(2026, 1, 1, hour), (None, False))
         tts.synthesize(cfg, line, cache=True)
+    for line in (cfg.say_denied, cfg.say_cooldown, cfg.say_near_miss):
+        tts.synthesize(cfg, line, cache=True)
 
 
 if __name__ == "__main__":
