@@ -15,10 +15,9 @@ def test_spoken_time():
     assert spoken_time(datetime(2026, 1, 1, 9, 0)) == "9 o'clock A M"
 
 
-def test_intro_line_with_battery():
+def test_intro_line_is_short_when_battery_ok():
     line = intro_line("boss", "Impact confirmed.", datetime(2026, 1, 1, 19, 42), (82, False))
-    assert line == ("Impact confirmed. Good evening, boss. It's 7:42 P M. "
-                    "Battery at 82 percent. All systems online.")
+    assert line == "Impact confirmed. Good evening, boss. All systems online."
 
 
 def test_intro_line_low_battery_and_desktop():

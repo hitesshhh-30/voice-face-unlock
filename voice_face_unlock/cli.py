@@ -134,7 +134,7 @@ def cmd_run(cfg: Config, args) -> None:
             else:
                 photo = save_intruder(cfg)
                 log.warning("DENIED (voice %.2f). intruder photo: %s", v, photo)
-                tts.speak(cfg, cfg.say_cooldown if guard.fail() else cfg.say_denied)
+                tts.speak(cfg, cfg.say_cooldown if guard.fail() else cfg.say_denied, cache=True)
     finally:
         fc.close()
 

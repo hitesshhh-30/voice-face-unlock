@@ -55,11 +55,10 @@ def spoken_time(now: datetime) -> str:
 
 
 def intro_line(cfg_name: str, success: str, now: datetime, bat: tuple[int | None, bool]) -> str:
+    """Short spoken line. Battery is only mentioned when it is low."""
     pct, charging = bat
-    parts = [success, f"{greeting(now)}, {cfg_name}.", f"It's {spoken_time(now)}."]
-    if pct is not None:
-        parts.append(f"Battery at {pct} percent{', charging' if charging else ''}.")
-        if pct <= 20 and not charging:
-            parts.append("I'd plug in soon.")
+    parts = [success, f"{greeting(now)}, {cfg_name}."]
+    if pct is not None and pct <= 20 and not charging:
+        parts.append(f"Battery at {pct} percent, I'd plug in soon.")
     parts.append("All systems online.")
-    return " ".join(parts)
+    return " ".join(p for p in parts if p)

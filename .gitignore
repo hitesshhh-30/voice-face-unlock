@@ -15,3 +15,6 @@ data/
 intruders/
 enroll/
 *.egg-info/
+intro-video/renders/
+intro-video/.hyperframes/
+intro-video/node_modules/

@@ -44,7 +44,11 @@ class Config:
     voice_model: str = "en_GB-alan-medium"   # Piper voice in models/ (falls back to spd-say)
     boss_name: str = "boss"
     intro_animation: bool = True
-    say_success: str = "Impact confirmed. Ninja inside."
+    intro_video: str = ""                    # custom mp4 path; default: bundled intro
+    cartesia_voice_id: str = "4bc3cb8c-adb9-4bb8-b5d5-cbbef950b991"  # "George", steady British male
+    cartesia_model: str = "sonic-3"
+    cartesia_timeout_s: float = 3.0
+    say_success: str = "Impact confirmed."
     say_denied: str = "Unknown entity. Face cached. Have a nice day."
     say_cooldown: str = "Too many attempts. Use your password."
     save_intruders: bool = True

@@ -1,0 +1,237 @@
+<!doctype html>
+<html
+  lang="en"
+  data-composition-variables='[
+    {"id":"boss","type":"string","label":"Name","default":"BOSS"},
+    {"id":"title","type":"string","label":"Title","default":"THE BYTE HAS LANDED"},
+    {"id":"color-accent","type":"color","label":"Accent","default":"#00E0FF"},
+    {"id":"color-confirm","type":"color","label":"Confirm","default":"#3DFFA8"}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ground: #04070b;
+        --ink: #e6f7ff;
+        --color-accent: #00e0ff;
+        --color-confirm: #3dffa8;
+        --font-code: "IBM Plex Mono";
+        --font-display: "Archivo Black";
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ground); }
+      #root { position: relative; width: 100%; height: 100%; background: var(--ground); }
+      #grid {
+        position: absolute; inset: 0; opacity: 0.4;
+        background-image:
+          linear-gradient(#0b1a24 1px, transparent 1px),
+          linear-gradient(90deg, #0b1a24 1px, transparent 1px);
+        background-size: 64px 64px;
+      }
+      #world { position: absolute; inset: 0; }
+      #world canvas { width: 1920px; height: 1080px; }
+
+      /* terminal */
+      #term { position: absolute; left: 192px; top: 300px; font-family: var(--font-code); font-size: 30px; line-height: 52px; color: var(--ink); }
+      .line { white-space: pre; }
+      .dim { color: #5f7c8c; }
+      .ok { color: var(--color-confirm); }
+      .acc { color: var(--color-accent); font-weight: 700; }
+      #cursor-wrap { position: absolute; left: 0; top: 0; }
+      #cursor { display: block; width: 18px; height: 34px; background: var(--color-accent); transform-origin: 50% 50%; }
+
+      /* titles */
+      #title-box, #welcome-box { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+      #title { font-family: var(--font-display); font-size: 132px; letter-spacing: -0.01em; color: var(--color-accent); }
+      #welcome { font-family: var(--font-display); font-size: 120px; letter-spacing: -0.01em; color: var(--ink); }
+      #welcome .w { display: inline-block; margin: 0 0.12em; }
+      #welcome .name { color: var(--color-accent); }
+      #online { margin-top: 28px; font-family: var(--font-code); font-size: 32px; color: #8fb3c4; letter-spacing: 0.08em; }
+      #online .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--color-confirm); margin-right: 16px; }
+      #flash { position: absolute; inset: 0; background: #e6f7ff; opacity: 0; }
+      #fade { position: absolute; inset: 0; background: var(--ground); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="6.6" data-width="1920" data-height="1080">
+      <div id="grid"></div>
+
+      <div id="world" class="clip" data-start="1.3" data-duration="2.6" data-track-index="1" data-layout-ignore>
+        <canvas id="cv" width="1920" height="1080"></canvas>
+      </div>
+
+      <div id="term-clip" class="clip" data-start="0" data-duration="1.65" data-track-index="2">
+        <div id="term">
+          <div class="line" id="l0"><span class="dim">byte-ninja@machine:~$ </span><span id="cmd"></span></div>
+          <div class="line" id="l1"><span id="t1"></span><span class="ok" id="k1"> ✓</span></div>
+          <div class="line" id="l2"><span id="t2"></span><span class="ok" id="k2"> ✓</span></div>
+          <div class="line" id="l3"><span id="t3"></span><span class="ok" id="k3"> ✓</span></div>
+          <div class="line acc" id="l4"><span id="t4"></span></div>
+        </div>
+        <div id="cursor-wrap"><span id="cursor"></span></div>
+      </div>
+
+      <div id="title-clip" class="clip" data-start="3.4" data-duration="1.25" data-track-index="3">
+        <div id="title-box" data-layout-allow-overlap><div id="title" data-var-text="title">THE BYTE HAS LANDED</div></div>
+      </div>
+
+      <div id="welcome-clip" class="clip" data-start="4.2" data-duration="2.4" data-track-index="4">
+        <div id="welcome-box" data-layout-allow-overlap>
+          <div id="welcome"><span class="w" id="w1">WELCOME</span><span class="w" id="w2">BACK,</span><span class="w name" id="w3" data-var-text="boss">BOSS</span></div>
+          <div id="online"><span class="dot"></span>all systems online</div>
+        </div>
+      </div>
+
+      <div id="flash-clip" class="clip" data-start="2.8" data-duration="0.3" data-track-index="5" data-layout-ignore><div id="flash"></div></div>
+      <div id="fade-clip" class="clip" data-start="6.15" data-duration="0.45" data-track-index="6" data-layout-ignore><div id="fade"></div></div>
+    </div>
+
+    <script>
+      // ---------- deterministic helpers ----------
+      function hash(i) { let x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+      const cubicIn = (x) => x * x * x;
+      const GLYPHS = "0123456789ABCDEF01";
+
+      const vars = (window.__hyperframes && window.__hyperframes.getVariables && window.__hyperframes.getVariables()) || {};
+      const ACCENT = vars["color-accent"] || "#00E0FF";
+      const TITLE = vars.title || "THE BYTE HAS LANDED";
+
+      // ---------- terminal (GSAP) ----------
+      const lines = [
+        ["#cmd", "./land --user boss"],
+        ["#t1", "voice.match ........ 0.87"],
+        ["#t2", "face.ir ............ 0.91"],
+        ["#t3", "liveness.blink ..... ok  "],
+        ["#t4", "ACCESS GRANTED"],
+      ];
+      // monospace: IBM Plex Mono advance = 0.6em = 18 px at 30 px; lines 52 px apart
+      const PROMPT = "byte-ninja@machine:~$ ".length;
+      function placeCursor(line, n) {
+        const col = (line === 0 ? PROMPT : 0) + n;
+        gsap.set("#cursor-wrap", { x: 192 + col * 18 + 6, y: 300 + line * 52 + 9 });
+      }
+      placeCursor(0, 0);
+      const tl = gsap.timeline({ paused: true });
+      const starts = [0.05, 0.42, 0.62, 0.82, 1.05];
+      const typeState = lines.map(() => ({ n: 0 }));
+      lines.forEach(([sel, text], i) => {
+        const el = document.querySelector(sel);
+        tl.fromTo(typeState[i], { n: 0 }, {
+          n: text.length, duration: i === 0 ? 0.32 : 0.16, ease: "none",
+          onUpdate: () => { const n = Math.round(typeState[i].n); el.textContent = text.slice(0, n); placeCursor(i, n); },
+        }, starts[i]);
+      });
+      ["#k1", "#k2", "#k3"].forEach((k, i) => tl.fromTo(k, { opacity: 0 }, { opacity: 1, duration: 0.05 }, starts[i + 1] + 0.17));
+      ["#l1", "#l2", "#l3", "#l4"].forEach((l, i) => tl.fromTo(l, { opacity: 0 }, { opacity: 1, duration: 0.01 }, starts[i + 1]));
+      // cursor becomes the world
+      tl.fromTo("#cursor", { scaleX: 1, scaleY: 1 }, { scaleX: 120, scaleY: 40, duration: 0.3, ease: "power3.in" }, 1.3);
+      tl.fromTo("#term", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power3.in" }, 1.3);
+      tl.fromTo("#cursor-wrap", { opacity: 1 }, { opacity: 0, duration: 0.15, ease: "power2.inOut" }, 1.5);
+
+      // impact
+      tl.fromTo("#flash", { opacity: 0 }, { opacity: 0.3, duration: 0.03, ease: "none" }, 2.8);
+      tl.to("#flash", { opacity: 0, duration: 0.12, ease: "power2.out" }, 2.83);
+
+      // crisp title snaps over the assembled glyphs, then leaves
+      tl.fromTo("#title", { opacity: 0, filter: "blur(10px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "expo.out" }, 3.4);
+      tl.fromTo("#title", { y: 0 }, { y: -40, opacity: 0, filter: "blur(10px)", duration: 0.35, ease: "power3.in", immediateRender: false }, 4.2);
+
+      // welcome, per word
+      ["#w1", "#w2", "#w3"].forEach((w, i) =>
+        tl.fromTo(w, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "expo.out" }, 4.35 + i * 0.1));
+      tl.fromTo("#online", { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, 4.9);
+      tl.fromTo("#fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.in" }, 6.18);
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      // ---------- byte world (canvas, pure function of t) ----------
+      const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+      const W = 1920, H = 1080, CX = W / 2, CY = H / 2;
+      const N = 1100;
+      const stars = Array.from({ length: N }, (_, i) => ({
+        x: (hash(i) * 2 - 1) * 1.6, y: (hash(i + 9001) * 2 - 1) * 0.95,
+        z: hash(i + 777) * 10, g: GLYPHS[Math.floor(hash(i + 31) * GLYPHS.length)],
+        green: hash(i + 55) > 0.93,
+      }));
+      let targets = null;
+      function sampleTitle() {
+        const off = document.createElement("canvas"); off.width = W; off.height = 300;
+        const o = off.getContext("2d");
+        o.fillStyle = "#fff"; o.font = '132px "Archivo Black"'; o.textAlign = "center"; o.textBaseline = "middle";
+        o.fillText(TITLE, W / 2, 150);
+        const d = o.getImageData(0, 0, W, 300).data, pts = [];
+        for (let y = 0; y < 300; y += 7) for (let x = 0; x < W; x += 7) if (d[(y * W + x) * 4 + 3] > 128) pts.push([x, y - 150 + CY]);
+        return pts;
+      }
+      // camera depth travelled by time t (speed ramps up, integral of speed)
+      function camZ(t) {
+        const u = clamp((t - 1.3) / 1.5, 0, 1);
+        return 0.6 * u + 9 * u * u * u;
+      }
+      function renderAt(t) {
+        ctx.clearRect(0, 0, W, H);
+        if (t < 1.3) return;
+        const cz = camZ(t);
+        const assemble = clamp((t - 2.8) / 0.6, 0, 1);
+        const a = expoOut(assemble);
+        const leave = clamp((t - 3.55) / 0.3, 0, 1);
+        const worldAlpha = clamp((t - 1.38) / 0.2, 0, 1) * (1 - leave);
+        if (worldAlpha <= 0) return;
+        const speed = clamp((t - 1.3) / 1.5, 0, 1);
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        for (let i = 0; i < N; i++) {
+          const s = stars[i];
+          let z = s.z - (cz % 10); if (z <= 0.15) z += 10;
+          const k = 1 / z;
+          let px = CX + s.x * k * 700, py = CY + s.y * k * 700;
+          let size = clamp(14 * k * 2.2, 6, 64);
+          let alpha = clamp(1 - z / 10, 0, 1) * worldAlpha;
+          if (targets && assemble > 0 && i < targets.length * 1.0) {
+            const tg = targets[i % targets.length];
+            px = px + (tg[0] - px) * a; py = py + (tg[1] - py) * a;
+            size = size + (11 - size) * a; alpha = alpha + (worldAlpha - alpha) * a;
+          } else if (assemble > 0) {
+            alpha *= 1 - a;
+          }
+          if (alpha < 0.02) continue;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = s.green ? "#3DFFA8" : ACCENT;
+          // streaks while diving fast
+          if (assemble === 0 && speed > 0.45) {
+            const k2 = 1 / (z + 0.35 * speed);
+            const qx = CX + s.x * k2 * 700, qy = CY + s.y * k2 * 700;
+            ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = Math.max(1, size / 8);
+            ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
+          }
+          ctx.font = `700 ${size.toFixed(1)}px "IBM Plex Mono"`;
+          ctx.fillText(s.g, px, py);
+        }
+        ctx.globalAlpha = 1;
+        // the byte that lands (2.55 -> 2.8) and its shockwave
+        const drop = clamp((t - 2.55) / 0.25, 0, 1);
+        if (drop > 0 && drop < 1) {
+          const sz = 4 + 24 * cubicIn(drop);
+          ctx.fillStyle = "#E6F7FF"; ctx.fillRect(CX - sz / 2, CY - sz / 2, sz, sz);
+        }
+        const wave = clamp((t - 2.8) / 0.45, 0, 1);
+        if (wave > 0 && wave < 1) {
+          ctx.globalAlpha = (1 - wave) * 0.9; ctx.strokeStyle = ACCENT; ctx.lineWidth = 6 * (1 - wave) + 1;
+          ctx.beginPath(); ctx.arc(CX, CY, 40 + 1100 * expoOut(wave), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      }
+      window.__hf = window.__hf || {};
+      window.__hf.buildReady = window.__hf.buildReady || {};
+      window.__hf.buildReady["fonts"] = Promise.all([
+        document.fonts.load('132px "Archivo Black"', TITLE),
+        document.fonts.load('700 20px "IBM Plex Mono"', "0123456789ABCDEF"),
+      ]).then(() => { targets = sampleTitle(); renderAt(0); });
+      window.addEventListener("hf-seek", (e) => renderAt(e.detail.time));
+      renderAt(0);
+    </script>
+  </body>
+</html>

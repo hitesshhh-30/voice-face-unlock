@@ -25,6 +25,8 @@ if [ ! -d "$M/vosk" ]; then
   (cd "$M" && unzip -q vosk.zip && rm vosk.zip && mv -T vosk-model-small-en-us-0.15 vosk)
 fi
 
+cp "$SRC/assets/intro.mp4" "$DATA/intro.mp4"
+
 echo "==> Command: ~/.local/bin/$APP"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$DATA/venv/bin/$APP" "$HOME/.local/bin/$APP"
