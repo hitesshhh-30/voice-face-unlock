@@ -1,0 +1,12 @@
+[Unit]
+Description=Voice + face + blink unlock for the GNOME lock screen
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/share/voice-face-unlock/venv/bin/voice-face-unlock run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

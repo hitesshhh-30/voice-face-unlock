@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Personal biometric data / models — NEVER commit
+*.wav
+*.npy
+*.npz
+*.onnx
+*.task
+models/
+data/
+intruders/
+enroll/
+*.egg-info/
