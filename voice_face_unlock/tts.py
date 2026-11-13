@@ -38,7 +38,7 @@ def _cartesia_wav(cfg: Config, text: str, out: Path) -> bool:
         "transcript": text,
         "voice": {"mode": "id", "id": cfg.cartesia_voice_id},
         "language": "en",
-        "output_format": {"container": "wav", "encoding": "pcm_s16le", "sample_rate": 44100},
+        "output_format": {"container": "raw", "encoding": "pcm_s16le", "sample_rate": 44100},
     }
     req = urllib.request.Request(
         CARTESIA_URL, data=json.dumps(body).encode(), method="POST",
@@ -46,10 +46,18 @@ def _cartesia_wav(cfg: Config, text: str, out: Path) -> bool:
     )
     try:
         with urllib.request.urlopen(req, timeout=cfg.cartesia_timeout_s) as r:
-            out.write_bytes(r.read())
-        return out.stat().st_size > 1000
+            pcm = r.read()
     except Exception:
         return False
+    if len(pcm) < 1000:
+        return False
+    # write our own header: Cartesia's streamed wav header has no real length
+    with wave.open(str(out), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(pcm)
+    return True
 
 
 def _piper_wav(cfg: Config, text: str, out: Path) -> bool:
