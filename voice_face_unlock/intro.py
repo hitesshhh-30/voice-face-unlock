@@ -18,7 +18,7 @@ from . import config as config_mod  # noqa: E402
 from . import sysinfo, tts  # noqa: E402
 
 VIDEO = Path(__file__).resolve().parent.parent / "assets" / "intro.mp4"
-VOICE_AT_S = 2.8      # impact frame in the film
+VOICE_AT_S = 6.3      # just after the impact (6.0 s) in the film
 MAX_EXTRA_HOLD_S = 6  # hold last frame at most this long waiting for the voice
 
 
@@ -77,10 +77,14 @@ def main() -> None:
     maker = threading.Thread(target=lambda: wav.update(p=tts.synthesize(cfg, line)), daemon=True)
     if cfg.speak:
         maker.start()
-    state = {"player": None, "held": 0.0}
+    state = {"player": None, "held": 0.0, "sfx": None}
 
     def on_time(t: float, finished: bool) -> bool:
-        """Start the voice at the impact. Returns True to keep holding the last frame."""
+        """Start the film's sound at frame 0 and the voice after the impact.
+        Returns True to keep holding the last frame."""
+        if state["sfx"] is None:
+            sfx = video.with_suffix(".wav") if video else None
+            state["sfx"] = tts.play(sfx) if sfx and sfx.exists() else False
         if cfg.speak and state["player"] is None and t >= VOICE_AT_S:
             maker.join(timeout=1.5)
             state["player"] = tts.play(wav.get("p"), line) or False

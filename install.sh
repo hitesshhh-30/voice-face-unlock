@@ -26,6 +26,7 @@ if [ ! -d "$M/vosk" ]; then
 fi
 
 cp "$SRC/assets/intro.mp4" "$DATA/intro.mp4"
+cp "$SRC/assets/intro.wav" "$DATA/intro.wav"
 
 echo "==> Command: ~/.local/bin/$APP"
 mkdir -p "$HOME/.local/bin"

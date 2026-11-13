@@ -2,236 +2,504 @@
 <html
   lang="en"
   data-composition-variables='[
-    {"id":"boss","type":"string","label":"Name","default":"BOSS"},
-    {"id":"title","type":"string","label":"Title","default":"THE BYTE HAS LANDED"},
-    {"id":"color-accent","type":"color","label":"Accent","default":"#00E0FF"},
-    {"id":"color-confirm","type":"color","label":"Confirm","default":"#3DFFA8"}
+    {"id":"bossName","type":"string","label":"Boss name","default":"BOSS"},
+    {"id":"titleText","type":"string","label":"3D title","default":"THE BYTE HAS LANDED"}
   ]'
 >
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.2/examples/jsm/"
+        }
+      }
+    </script>
     <style>
       :root {
-        --ground: #04070b;
-        --ink: #e6f7ff;
-        --color-accent: #00e0ff;
-        --color-confirm: #3dffa8;
-        --font-code: "IBM Plex Mono";
-        --font-display: "Archivo Black";
+        --void-ground: #04070b;
+        --fog: #070c11;
+        --title-ink: #e6f7ff;
+        --letterbox: #000000;
+        --ls: 0.62em;
+        --blur: 6px;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ground); }
-      #root { position: relative; width: 100%; height: 100%; background: var(--ground); }
-      #grid {
-        position: absolute; inset: 0; opacity: 0.4;
-        background-image:
-          linear-gradient(#0b1a24 1px, transparent 1px),
-          linear-gradient(90deg, #0b1a24 1px, transparent 1px);
-        background-size: 64px 64px;
-      }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--void-ground); }
+      #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--void-ground); }
+
       #world { position: absolute; inset: 0; }
-      #world canvas { width: 1920px; height: 1080px; }
+      #gl { display: block; width: 1920px; height: 1080px; }
 
-      /* terminal */
-      #term { position: absolute; left: 192px; top: 300px; font-family: var(--font-code); font-size: 30px; line-height: 52px; color: var(--ink); }
-      .line { white-space: pre; }
-      .dim { color: #5f7c8c; }
-      .ok { color: var(--color-confirm); }
-      .acc { color: var(--color-accent); font-weight: 700; }
-      #cursor-wrap { position: absolute; left: 0; top: 0; }
-      #cursor { display: block; width: 18px; height: 34px; background: var(--color-accent); transform-origin: 50% 50%; }
+      /* vignette (registry: vignette, customized) */
+      #hf-vignette {
+        position: absolute; inset: 0; pointer-events: none; z-index: 20;
+        background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+      }
+      /* grain (registry: grain-overlay, customized to be seek-safe) */
+      #grain-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 30; overflow: hidden; mix-blend-mode: overlay; opacity: 0.07; }
+      #grain-overlay .grain-texture {
+        position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+        background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      }
 
-      /* titles */
-      #title-box, #welcome-box { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-      #title { font-family: var(--font-display); font-size: 132px; letter-spacing: -0.01em; color: var(--color-accent); }
-      #welcome { font-family: var(--font-display); font-size: 120px; letter-spacing: -0.01em; color: var(--ink); }
-      #welcome .w { display: inline-block; margin: 0 0.12em; }
-      #welcome .name { color: var(--color-accent); }
-      #online { margin-top: 28px; font-family: var(--font-code); font-size: 32px; color: #8fb3c4; letter-spacing: 0.08em; }
-      #online .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--color-confirm); margin-right: 16px; }
-      #flash { position: absolute; inset: 0; background: #e6f7ff; opacity: 0; }
-      #fade { position: absolute; inset: 0; background: var(--ground); opacity: 0; }
+      /* welcome title (registry: tracking-in, customized) */
+      #title-layer {
+        position: absolute; inset: 0; z-index: 40;
+        display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+        padding: 0 160px 206px; pointer-events: none;
+      }
+      #welcome {
+        font-family: "Montserrat", sans-serif; font-weight: 500; font-size: 40px; line-height: 1;
+        text-transform: uppercase; color: var(--title-ink); white-space: nowrap;
+        letter-spacing: var(--ls); padding-left: var(--ls);
+        filter: blur(var(--blur)); opacity: 0;
+      }
+
+      #fade { position: absolute; inset: 0; z-index: 50; background: var(--letterbox); opacity: 1; pointer-events: none; }
+      .bar { position: absolute; left: 0; width: 1920px; height: 138px; background: var(--letterbox); z-index: 60; }
+      #bar-top { top: 0; }
+      #bar-bottom { bottom: 0; }
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="6.6" data-width="1920" data-height="1080">
-      <div id="grid"></div>
-
-      <div id="world" class="clip" data-start="1.3" data-duration="2.6" data-track-index="1" data-layout-ignore>
-        <canvas id="cv" width="1920" height="1080"></canvas>
+    <div id="stage" data-composition-id="main" data-start="0" data-duration="12.5" data-fps="30" data-width="1920" data-height="1080">
+      <div id="film" class="clip" data-start="0" data-duration="12.5" data-track-index="0" data-layout-ignore>
+        <div id="world"><canvas id="gl" width="1920" height="1080"></canvas></div>
+        <div id="hf-vignette"></div>
+        <div id="grain-overlay"><div class="grain-texture"></div></div>
+        <div id="title-layer"><div id="welcome">WELCOME BACK, BOSS</div></div>
+        <div id="fade"></div>
+        <div class="bar" id="bar-top"></div>
+        <div class="bar" id="bar-bottom"></div>
       </div>
 
-      <div id="term-clip" class="clip" data-start="0" data-duration="1.65" data-track-index="2">
-        <div id="term">
-          <div class="line" id="l0"><span class="dim">byte-ninja@machine:~$ </span><span id="cmd"></span></div>
-          <div class="line" id="l1"><span id="t1"></span><span class="ok" id="k1"> ✓</span></div>
-          <div class="line" id="l2"><span id="t2"></span><span class="ok" id="k2"> ✓</span></div>
-          <div class="line" id="l3"><span id="t3"></span><span class="ok" id="k3"> ✓</span></div>
-          <div class="line acc" id="l4"><span id="t4"></span></div>
-        </div>
-        <div id="cursor-wrap"><span id="cursor"></span></div>
-      </div>
-
-      <div id="title-clip" class="clip" data-start="3.4" data-duration="1.25" data-track-index="3">
-        <div id="title-box" data-layout-allow-overlap><div id="title" data-var-text="title">THE BYTE HAS LANDED</div></div>
-      </div>
-
-      <div id="welcome-clip" class="clip" data-start="4.2" data-duration="2.4" data-track-index="4">
-        <div id="welcome-box" data-layout-allow-overlap>
-          <div id="welcome"><span class="w" id="w1">WELCOME</span><span class="w" id="w2">BACK,</span><span class="w name" id="w3" data-var-text="boss">BOSS</span></div>
-          <div id="online"><span class="dot"></span>all systems online</div>
-        </div>
-      </div>
-
-      <div id="flash-clip" class="clip" data-start="2.8" data-duration="0.3" data-track-index="5" data-layout-ignore><div id="flash"></div></div>
-      <div id="fade-clip" class="clip" data-start="6.15" data-duration="0.45" data-track-index="6" data-layout-ignore><div id="fade"></div></div>
+      <audio id="sfx-riser" src="assets/sfx/sfx_001.mp3" data-start="2.0" data-media-start="0.15" data-duration="4.6" data-volume="0.8" data-fade-in="0.4" data-fade-out="0.3" data-track-index="10"></audio>
+      <audio id="sfx-impact" src="assets/sfx/sfx_002.mp3" data-start="5.97" data-media-start="0" data-duration="2.6" data-fade-out="0.8" data-track-index="11"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.9},{"t":0.15,"v":0.9},{"t":0.43,"v":0.3},{"t":2.6,"v":0.3}]}]}'></audio>
+      <audio id="sfx-rise-whoosh" src="assets/sfx/sfx_004.mp3" data-start="6.6" data-media-start="1.0" data-duration="3.4" data-volume="0.3" data-fade-out="0.5" data-track-index="12"></audio>
+      <audio id="sfx-title-sparkle" src="assets/sfx/sfx_003.mp3" data-start="9.55" data-media-start="0" data-duration="1.8" data-volume="0.22" data-fade-out="0.4" data-track-index="13"></audio>
     </div>
 
     <script>
-      // ---------- deterministic helpers ----------
-      function hash(i) { let x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
-      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-      const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
-      const cubicIn = (x) => x * x * x;
-      const GLYPHS = "0123456789ABCDEF01";
-
+      // ---------- shared, deterministic, defined BEFORE any tween ----------
+      const DURATION = 12.5;
+      const FPS = 30;
       const vars = (window.__hyperframes && window.__hyperframes.getVariables && window.__hyperframes.getVariables()) || {};
-      const ACCENT = vars["color-accent"] || "#00E0FF";
-      const TITLE = vars.title || "THE BYTE HAS LANDED";
+      const BOSS = String(vars.bossName || "BOSS").toUpperCase();
+      window.__TITLE_TEXT = String(vars.titleText || "THE BYTE HAS LANDED").toUpperCase();
+      document.getElementById("welcome").textContent = "WELCOME BACK, " + BOSS;
 
-      // ---------- terminal (GSAP) ----------
-      const lines = [
-        ["#cmd", "./land --user boss"],
-        ["#t1", "voice.match ........ 0.87"],
-        ["#t2", "face.ir ............ 0.91"],
-        ["#t3", "liveness.blink ..... ok  "],
-        ["#t4", "ACCESS GRANTED"],
-      ];
-      // monospace: IBM Plex Mono advance = 0.6em = 18 px at 30 px; lines 52 px apart
-      const PROMPT = "byte-ninja@machine:~$ ".length;
-      function placeCursor(line, n) {
-        const col = (line === 0 ? PROMPT : 0) + n;
-        gsap.set("#cursor-wrap", { x: 192 + col * 18 + 6, y: 300 + line * 52 + 9 });
+      function hash1(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+      const grainEl = document.querySelector("#grain-overlay .grain-texture");
+      function grainAt(t) {
+        const f = Math.floor(t * FPS);
+        const gx = (hash1(f) - 0.5) * 30, gy = (hash1(f + 999) - 0.5) * 30;
+        grainEl.style.transform = "translate(" + gx.toFixed(2) + "%," + gy.toFixed(2) + "%)";
       }
-      placeCursor(0, 0);
-      const tl = gsap.timeline({ paused: true });
-      const starts = [0.05, 0.42, 0.62, 0.82, 1.05];
-      const typeState = lines.map(() => ({ n: 0 }));
-      lines.forEach(([sel, text], i) => {
-        const el = document.querySelector(sel);
-        tl.fromTo(typeState[i], { n: 0 }, {
-          n: text.length, duration: i === 0 ? 0.32 : 0.16, ease: "none",
-          onUpdate: () => { const n = Math.round(typeState[i].n); el.textContent = text.slice(0, n); placeCursor(i, n); },
-        }, starts[i]);
-      });
-      ["#k1", "#k2", "#k3"].forEach((k, i) => tl.fromTo(k, { opacity: 0 }, { opacity: 1, duration: 0.05 }, starts[i + 1] + 0.17));
-      ["#l1", "#l2", "#l3", "#l4"].forEach((l, i) => tl.fromTo(l, { opacity: 0 }, { opacity: 1, duration: 0.01 }, starts[i + 1]));
-      // cursor becomes the world
-      tl.fromTo("#cursor", { scaleX: 1, scaleY: 1 }, { scaleX: 120, scaleY: 40, duration: 0.3, ease: "power3.in" }, 1.3);
-      tl.fromTo("#term", { opacity: 1, filter: "blur(0px)" }, { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power3.in" }, 1.3);
-      tl.fromTo("#cursor-wrap", { opacity: 1 }, { opacity: 0, duration: 0.15, ease: "power2.inOut" }, 1.5);
 
-      // impact
-      tl.fromTo("#flash", { opacity: 0 }, { opacity: 0.3, duration: 0.03, ease: "none" }, 2.8);
-      tl.to("#flash", { opacity: 0, duration: 0.12, ease: "power2.out" }, 2.83);
-
-      // crisp title snaps over the assembled glyphs, then leaves
-      tl.fromTo("#title", { opacity: 0, filter: "blur(10px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.18, ease: "expo.out" }, 3.4);
-      tl.fromTo("#title", { y: 0 }, { y: -40, opacity: 0, filter: "blur(10px)", duration: 0.35, ease: "power3.in", immediateRender: false }, 4.2);
-
-      // welcome, per word
-      ["#w1", "#w2", "#w3"].forEach((w, i) =>
-        tl.fromTo(w, { opacity: 0, filter: "blur(8px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "expo.out" }, 4.35 + i * 0.1));
-      tl.fromTo("#online", { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "power2.out" }, 4.9);
-      tl.fromTo("#fade", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.in" }, 6.18);
-      window.__timelines = window.__timelines || {};
-      window.__timelines["main"] = tl;
-
-      // ---------- byte world (canvas, pure function of t) ----------
-      const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
-      const W = 1920, H = 1080, CX = W / 2, CY = H / 2;
-      const N = 1100;
-      const stars = Array.from({ length: N }, (_, i) => ({
-        x: (hash(i) * 2 - 1) * 1.6, y: (hash(i + 9001) * 2 - 1) * 0.95,
-        z: hash(i + 777) * 10, g: GLYPHS[Math.floor(hash(i + 31) * GLYPHS.length)],
-        green: hash(i + 55) > 0.93,
-      }));
-      let targets = null;
-      function sampleTitle() {
-        const off = document.createElement("canvas"); off.width = W; off.height = 300;
-        const o = off.getContext("2d");
-        o.fillStyle = "#fff"; o.font = '132px "Archivo Black"'; o.textAlign = "center"; o.textBaseline = "middle";
-        o.fillText(TITLE, W / 2, 150);
-        const d = o.getImageData(0, 0, W, 300).data, pts = [];
-        for (let y = 0; y < 300; y += 7) for (let x = 0; x < W; x += 7) if (d[(y * W + x) * 4 + 3] > 128) pts.push([x, y - 150 + CY]);
-        return pts;
-      }
-      // camera depth travelled by time t (speed ramps up, integral of speed)
-      function camZ(t) {
-        const u = clamp((t - 1.3) / 1.5, 0, 1);
-        return 0.6 * u + 9 * u * u * u;
-      }
+      // The Three.js module installs window.__renderWorld when the scene is built.
       function renderAt(t) {
-        ctx.clearRect(0, 0, W, H);
-        if (t < 1.3) return;
-        const cz = camZ(t);
-        const assemble = clamp((t - 2.8) / 0.6, 0, 1);
-        const a = expoOut(assemble);
-        const leave = clamp((t - 3.55) / 0.3, 0, 1);
-        const worldAlpha = clamp((t - 1.38) / 0.2, 0, 1) * (1 - leave);
-        if (worldAlpha <= 0) return;
-        const speed = clamp((t - 1.3) / 1.5, 0, 1);
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        for (let i = 0; i < N; i++) {
-          const s = stars[i];
-          let z = s.z - (cz % 10); if (z <= 0.15) z += 10;
-          const k = 1 / z;
-          let px = CX + s.x * k * 700, py = CY + s.y * k * 700;
-          let size = clamp(14 * k * 2.2, 6, 64);
-          let alpha = clamp(1 - z / 10, 0, 1) * worldAlpha;
-          if (targets && assemble > 0 && i < targets.length * 1.0) {
-            const tg = targets[i % targets.length];
-            px = px + (tg[0] - px) * a; py = py + (tg[1] - py) * a;
-            size = size + (11 - size) * a; alpha = alpha + (worldAlpha - alpha) * a;
-          } else if (assemble > 0) {
-            alpha *= 1 - a;
-          }
-          if (alpha < 0.02) continue;
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = s.green ? "#3DFFA8" : ACCENT;
-          // streaks while diving fast
-          if (assemble === 0 && speed > 0.45) {
-            const k2 = 1 / (z + 0.35 * speed);
-            const qx = CX + s.x * k2 * 700, qy = CY + s.y * k2 * 700;
-            ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = Math.max(1, size / 8);
-            ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
-          }
-          ctx.font = `700 ${size.toFixed(1)}px "IBM Plex Mono"`;
-          ctx.fillText(s.g, px, py);
-        }
-        ctx.globalAlpha = 1;
-        // the byte that lands (2.55 -> 2.8) and its shockwave
-        const drop = clamp((t - 2.55) / 0.25, 0, 1);
-        if (drop > 0 && drop < 1) {
-          const sz = 4 + 24 * cubicIn(drop);
-          ctx.fillStyle = "#E6F7FF"; ctx.fillRect(CX - sz / 2, CY - sz / 2, sz, sz);
-        }
-        const wave = clamp((t - 2.8) / 0.45, 0, 1);
-        if (wave > 0 && wave < 1) {
-          ctx.globalAlpha = (1 - wave) * 0.9; ctx.strokeStyle = ACCENT; ctx.lineWidth = 6 * (1 - wave) + 1;
-          ctx.beginPath(); ctx.arc(CX, CY, 40 + 1100 * expoOut(wave), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
-        }
+        grainAt(t);
+        if (window.__renderWorld) window.__renderWorld(t);
       }
+
+      // build-ready hold, resolved by the module once the scene is drawable
       window.__hf = window.__hf || {};
       window.__hf.buildReady = window.__hf.buildReady || {};
-      window.__hf.buildReady["fonts"] = Promise.all([
-        document.fonts.load('132px "Archivo Black"', TITLE),
-        document.fonts.load('700 20px "IBM Plex Mono"', "0123456789ABCDEF"),
-      ]).then(() => { targets = sampleTitle(); renderAt(0); });
+      window.__hf.buildReady["landing-world"] = new Promise((res) => { window.__resolveWorld = res; });
+
+      // ---------- the one paused timeline ----------
+      const tl = gsap.timeline({ paused: true });
+      const clock = { t: 0 };
+      tl.fromTo(clock, { t: 0 }, {
+        t: DURATION, duration: DURATION, ease: "none",
+        onUpdate: () => renderAt(clock.t),
+      }, 0);
+
+      // fade up from black, fade to black
+      tl.fromTo("#fade", { opacity: 1 }, { opacity: 0, duration: 0.8, ease: "sine.out" }, 0);
+      tl.fromTo("#fade", { opacity: 0 }, { opacity: 1, duration: 0.7, ease: "power1.in", immediateRender: false }, 11.8);
+
+      // welcome title: restrained tracking-in + fade + de-blur
+      tl.fromTo("#welcome",
+        { opacity: 0, "--ls": "0.62em", "--blur": "6px" },
+        { opacity: 0.92, "--ls": "0.5em", "--blur": "0px", duration: 0.9, ease: "sine.out" }, 9.6);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
       window.addEventListener("hf-seek", (e) => renderAt(e.detail.time));
-      renderAt(0);
+      tl.seek(0);
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+      import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+      import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+      import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+      const P = {
+        void_ground: "#04070B", fog: "#070C11", tile_graphite: "#1A1F25", tile_graphite_alt: "#232A31",
+        horizon_glow: "#2A5566", horizon_band_core: "#9BD9E6", ice_light: "#CFF6FF",
+        letter_top_emissive: "#7FE8FF", byte_core: "#E9FDFF", byte_light: "#9BEFFF",
+        hemi_sky: "#22404D",
+      };
+
+      // ---------- math ----------
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const sat = (v) => clamp(v, 0, 1);
+      const smooth = (a, b, x) => { const u = sat((x - a) / (b - a)); return u * u * (3 - 2 * u); };
+      const sineInOut = (x) => -(Math.cos(Math.PI * sat(x)) - 1) / 2;
+      const expoOut = (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x));
+      const power2In = (x) => x * x;
+      function hash2(i, j) { const x = Math.sin(i * 127.1 + j * 311.7 + 17.13) * 43758.5453; return x - Math.floor(x); }
+
+      // ---------- renderer / scene ----------
+      const canvas = document.getElementById("gl");
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+      renderer.setPixelRatio(1);
+      renderer.setSize(1920, 1080, false);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(P.void_ground);
+      scene.fog = new THREE.FogExp2(P.fog, 0.0105);
+      const camera = new THREE.PerspectiveCamera(32, 1920 / 1080, 0.5, 4000);
+
+      // shared uniforms
+      const U = { uTime: { value: 0 }, uFogOffset: { value: 0 }, uEmis: { value: new THREE.Color(P.letter_top_emissive) } };
+
+      // ---------- sky ----------
+      const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(1800, 48, 24),
+        new THREE.ShaderMaterial({
+          side: THREE.BackSide, depthWrite: false, fog: false,
+          uniforms: {
+            cTop: { value: new THREE.Color(P.void_ground) },
+            cGlow: { value: new THREE.Color(P.horizon_glow) },
+            cCore: { value: new THREE.Color(P.horizon_band_core) },
+          },
+          vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+          fragmentShader: `uniform vec3 cTop; uniform vec3 cGlow; uniform vec3 cCore; varying vec3 vDir;
+            void main(){
+              float h = normalize(vDir).y;
+              vec3 col = cTop + (cGlow - cTop) * (exp(-max(h, 0.0) / 0.075) * 0.85 + exp(-max(h, 0.0) / 0.45) * 0.16);
+              col += cCore * 0.22 * exp(-abs(h - 0.004) / 0.005);
+              col = mix(col, cTop, smoothstep(0.0, -0.035, h));
+              gl_FragColor = vec4(col, 1.0);
+              #include <colorspace_fragment>
+            }`,
+        }),
+      );
+      sky.renderOrder = -1;
+      scene.add(sky);
+
+      // ---------- lights ----------
+      const hemi = new THREE.HemisphereLight(P.hemi_sky, P.void_ground, 1.4);
+      scene.add(hemi);
+      const moon = new THREE.DirectionalLight(P.ice_light, 0.75);
+      moon.position.set(0, 40, -300);
+      moon.target.position.set(0, 0, 0);
+      scene.add(moon, moon.target);
+      const byteLight = new THREE.PointLight(P.byte_light, 0, 45, 2);
+      scene.add(byteLight);
+
+      // ---------- title bitmap ----------
+      const G = {
+        A:["01110","10001","10001","11111","10001","10001","10001"], B:["11110","10001","10001","11110","10001","10001","11110"],
+        C:["01110","10001","10000","10000","10000","10001","01110"], D:["11110","10001","10001","10001","10001","10001","11110"],
+        E:["11111","10000","10000","11110","10000","10000","11111"], F:["11111","10000","10000","11110","10000","10000","10000"],
+        G:["01110","10001","10000","10111","10001","10001","01111"], H:["10001","10001","10001","11111","10001","10001","10001"],
+        I:["11111","00100","00100","00100","00100","00100","11111"], J:["00111","00010","00010","00010","00010","10010","01100"],
+        K:["10001","10010","10100","11000","10100","10010","10001"], L:["10000","10000","10000","10000","10000","10000","11111"],
+        M:["10001","11011","10101","10101","10001","10001","10001"], N:["10001","10001","11001","10101","10011","10001","10001"],
+        O:["01110","10001","10001","10001","10001","10001","01110"], P:["11110","10001","10001","11110","10000","10000","10000"],
+        Q:["01110","10001","10001","10001","10101","10010","01101"], R:["11110","10001","10001","11110","10100","10010","10001"],
+        S:["01111","10000","10000","01110","00001","00001","11110"], T:["11111","00100","00100","00100","00100","00100","00100"],
+        U:["10001","10001","10001","10001","10001","10001","01110"], V:["10001","10001","10001","10001","10001","01010","00100"],
+        W:["10001","10001","10001","10101","10101","10101","01010"], X:["10001","10001","01010","00100","01010","10001","10001"],
+        Y:["10001","10001","01010","00100","00100","00100","00100"], Z:["11111","00001","00010","00100","01000","10000","11111"],
+        ",":["00","00","00","00","00","01","10"],
+      };
+      function lineCols(line) {
+        // returns array of [colOffset, glyphRows] and total width in glyph columns
+        const out = []; let x = 0; let prevWasGlyph = false;
+        for (const ch of line) {
+          if (ch === " ") { if (prevWasGlyph) x -= 1; x += 3; prevWasGlyph = false; continue; }
+          const g = G[ch]; if (!g) continue;
+          out.push([x, g]); x += g[0].length + 1; prevWasGlyph = true;
+        }
+        if (prevWasGlyph) x -= 1;
+        return { glyphs: out, width: x };
+      }
+      function splitTwo(text) {
+        const words = text.trim().split(/\s+/);
+        if (words.length < 2) return [text.trim()];
+        let best = null;
+        for (let k = 1; k < words.length; k++) {
+          const a = words.slice(0, k).join(" "), b = words.slice(k).join(" ");
+          const d = Math.abs(lineCols(a).width - lineCols(b).width);
+          if (!best || d < best.d) best = { d, lines: [a, b] };
+        }
+        return best.lines;
+      }
+      const lines = splitTwo(window.__TITLE_TEXT);
+      const letterSet = new Map(); // "i,j" -> true (tile coords)
+      const PIX = 2; // tiles per glyph pixel
+      const lineGapRows = 3;
+      const totalRows = lines.length * 7 + (lines.length - 1) * lineGapRows;
+      const z0 = -Math.round((totalRows * PIX) / 2);
+      let blockMinX = 1e9, blockMaxX = -1e9;
+      lines.forEach((ln, li) => {
+        const L = lineCols(ln);
+        const x0 = -Math.round((L.width * PIX) / 2);
+        blockMinX = Math.min(blockMinX, x0); blockMaxX = Math.max(blockMaxX, x0 + L.width * PIX - 1);
+        const rowBase = li * (7 + lineGapRows);
+        for (const [cx, g] of L.glyphs) {
+          for (let r = 0; r < 7; r++) for (let c = 0; c < g[r].length; c++) {
+            if (g[r][c] !== "1") continue;
+            for (let a = 0; a < PIX; a++) for (let b = 0; b < PIX; b++) {
+              letterSet.set((x0 + (cx + c) * PIX + a) + "," + (z0 + (rowBase + r) * PIX + b), true);
+            }
+          }
+        }
+      });
+      const blockMinZ = z0, blockMaxZ = z0 + totalRows * PIX - 1;
+
+      // ---------- tile field ----------
+      const X_MIN = -100, X_MAX = 99, Z_MIN = -100, Z_MAX = 182;
+      const COUNT = (X_MAX - X_MIN + 1) * (Z_MAX - Z_MIN + 1);
+      const TILE_H = 0.35;
+      const geo = new THREE.BoxGeometry(0.92, TILE_H, 0.92);
+      geo.translate(0, TILE_H / 2, 0);
+      const info = new Float32Array(COUNT * 4);
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, metalness: 0.2 });
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.uTime = U.uTime; sh.uniforms.uFogOffset = U.uFogOffset; sh.uniforms.uEmis = U.uEmis;
+        sh.vertexShader = sh.vertexShader
+          .replace("#include <common>", `#include <common>
+            attribute vec4 aInfo; uniform float uTime; varying float vTop; varying float vGlow; varying float vRough;`)
+          .replace("#include <begin_vertex>", `
+            vec3 transformed = vec3(position);
+            vec3 ip = vec3(instanceMatrix[3][0], 0.0, instanceMatrix[3][2]);
+            float d = length(ip.xz);
+            float dt = uTime - 6.0;
+            float band = 0.0;
+            if (dt > 0.0) { float wr = 46.0 * dt - 4.0 * dt * dt; float q = d - wr; band = exp(-(q * q) / (2.0 * 2.6 * 2.6)) * (1.0 - smoothstep(1.6, 2.4, dt)); }
+            float lift = 0.9 * band * exp(-max(dt, 0.0) / 1.4);
+            float glow = 1.1 * band * exp(-max(dt, 0.0) / 1.1) * 2.2;
+            if (dt > 0.0) glow += 6.0 * exp(-d * d / 18.0) * exp(-dt / 0.35);
+            float p = clamp((uTime - aInfo.y) / 1.3, 0.0, 1.0);
+            float rise = 0.0;
+            if (aInfo.x > 0.5 && aInfo.x < 1.5) {
+              rise = 3.2 * (p >= 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * p));
+              float breath = 1.0 + 0.04 * sin(6.2831853 * 0.25 * max(uTime - 9.5, 0.0));
+              glow += 0.9 * sin(p * 1.5707963) * breath;
+            } else if (aInfo.x > 1.5) {
+              rise = 0.15 * sin(3.1415926 * p);
+            }
+            transformed.y = position.y * (${TILE_H.toFixed(2)} + rise) / ${TILE_H.toFixed(2)} + aInfo.z + lift;
+            vTop = step(0.5, normal.y);
+            vGlow = glow;
+            vRough = 0.55 + 0.3 * aInfo.w;`);
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", `#include <common>
+            uniform vec3 uEmis; uniform float uFogOffset; varying float vTop; varying float vGlow; varying float vRough;`)
+          .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+            roughnessFactor = vRough;`)
+          .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+            totalEmissiveRadiance += uEmis * vTop * vGlow * 1.9;`)
+          .replace("#include <fog_fragment>", `
+            #ifdef USE_FOG
+              float fd = max(vFogDepth - uFogOffset, 0.0);
+              float fogFactor = 1.0 - exp(-fogDensity * fogDensity * fd * fd);
+              gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+            #endif`);
+      };
+      const tiles = new THREE.InstancedMesh(geo, mat, COUNT);
+      tiles.frustumCulled = false;
+      const m4 = new THREE.Matrix4();
+      const cA = new THREE.Color(P.tile_graphite), cB = new THREE.Color(P.tile_graphite_alt), cTmp = new THREE.Color();
+      let n = 0;
+      for (let j = Z_MIN; j <= Z_MAX; j++) {
+        for (let i = X_MIN; i <= X_MAX; i++) {
+          m4.makeTranslation(i, 0, j);
+          tiles.setMatrixAt(n, m4);
+          const h = hash2(i, j);
+          cTmp.copy(cA).lerp(cB, hash2(i + 71, j - 13));
+          tiles.setColorAt(n, cTmp);
+          const isLetter = letterSet.has(i + "," + j);
+          const inBlock = i >= blockMinX - 2 && i <= blockMaxX + 2 && j >= blockMinZ - 2 && j <= blockMaxZ + 2;
+          const dist = Math.hypot(i, j);
+          info[n * 4 + 0] = isLetter ? 1 : inBlock ? 2 : 0;
+          info[n * 4 + 1] = 6.6 + 0.9 * smooth(0, 62, dist) + 0.12 * hash2(i - 5, j + 9);
+          info[n * 4 + 2] = 0.06 * h;
+          info[n * 4 + 3] = hash2(i + 3, j + 33);
+          n++;
+        }
+      }
+      geo.setAttribute("aInfo", new THREE.InstancedBufferAttribute(info, 4));
+      tiles.instanceMatrix.needsUpdate = true;
+      tiles.instanceColor.needsUpdate = true;
+      scene.add(tiles);
+
+      // ---------- the byte ----------
+      const byteGroup = new THREE.Group();
+      const byteCore = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(P.byte_core).multiplyScalar(2.6), fog: false }));
+      const byteShell = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.35, 1.35),
+        new THREE.MeshBasicMaterial({ color: P.letter_top_emissive, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      byteGroup.add(byteCore, byteShell);
+      scene.add(byteGroup);
+
+      // trail: camera-facing (about Y) additive ribbon, gradient bright at the byte -> transparent at the tail
+      const trailGeo = new THREE.PlaneGeometry(1, 1);
+      trailGeo.translate(0, 0.5, 0);
+      const trail = new THREE.Mesh(trailGeo, new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+        uniforms: { uCol: { value: new THREE.Color(P.ice_light) }, uAlpha: { value: 1 } },
+        vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+        fragmentShader: `uniform vec3 uCol; uniform float uAlpha; varying vec2 vUv;
+          void main(){
+            float along = pow(1.0 - vUv.y, 1.6);
+            float across = 1.0 - abs(vUv.x - 0.5) * 2.0;
+            across = across * across;
+            gl_FragColor = vec4(uCol * 2.2 * along * across * uAlpha, 1.0);
+            #include <colorspace_fragment>
+          }`,
+      }));
+      scene.add(trail);
+
+      // ---------- post ----------
+      const composer = new EffectComposer(renderer);
+      composer.setPixelRatio(1);
+      composer.setSize(1920, 1080);
+      composer.addPass(new RenderPass(scene, camera));
+      const bloom = new UnrealBloomPass(new THREE.Vector2(960, 540), 0.75, 0.55, 0.82);
+      composer.addPass(bloom);
+      composer.addPass(new OutputPass());
+
+      // ---------- camera ----------
+      const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+      const sph = (r, elev, az) => {
+        const e = THREE.MathUtils.degToRad(elev), a = THREE.MathUtils.degToRad(az);
+        return new THREE.Vector3(r * Math.cos(e) * Math.sin(a), r * Math.sin(e), r * Math.cos(e) * Math.cos(a));
+      };
+      // spline 1: 0 -> 6.0 ; spline 2: 6.6 -> 12.5 (starts at the held 6.0 pose)
+      const S1 = {
+        times: [0, 2.5, 4.2, 6.0],
+        pos: new THREE.CatmullRomCurve3([V([-38, 3.0, 190]), V([-33, 3.4, 150]), V([-28, 4.4, 108]), V([-22, 5.8, 70])], false, "centripetal"),
+        look: new THREE.CatmullRomCurve3([V([-14, 3.6, 0]), V([-8, 4.5, 0]), V([-3, 3.0, 0]), V([0, 1.0, 0])], false, "centripetal"),
+        m0: "secant", m1: 0,
+      };
+      const S2 = {
+        times: [6.6, 8.2, 9.6, 12.5],
+        pos: new THREE.CatmullRomCurve3([V([-22, 5.8, 70]), sph(120, 26, -8), sph(175, 44, 4), sph(168, 45, 6)], false, "centripetal"),
+        look: new THREE.CatmullRomCurve3([V([0, 1.0, 0]), V([0, 1.2, -2]), V([0, 0, -4]), V([0, 0, -4])], false, "centripetal"),
+        m0: 0, m1: "secant",
+      };
+      // monotone Hermite time -> spline parameter u (eases at the chosen ends, no velocity jumps at keys)
+      function timeToU(S, t) {
+        const T = S.times, k = T.length - 1;
+        const tt = clamp(t, T[0], T[k]);
+        let i = 0; while (i < k - 1 && tt > T[i + 1]) i++;
+        const sec = (s) => (1 / k) / (T[s + 1] - T[s]);
+        const slope = (s) => {
+          if (s === 0) return S.m0 === "secant" ? sec(0) : 0;
+          if (s === k) return S.m1 === "secant" ? sec(k - 1) : 0;
+          return (sec(s - 1) + sec(s)) / 2;
+        };
+        const h = T[i + 1] - T[i], x = (tt - T[i]) / h;
+        const u0 = i / k, u1 = (i + 1) / k;
+        const h00 = 2 * x * x * x - 3 * x * x + 1, h10 = x * x * x - 2 * x * x + x, h01 = -2 * x * x * x + 3 * x * x, h11 = x * x * x - x * x;
+        return clamp(h00 * u0 + h10 * h * slope(i) + h01 * u1 + h11 * h * slope(i + 1), 0, 1);
+      }
+
+      // ---------- byte path ----------
+      function byteY(t) { const x = sat((t - 2.5) / 3.5); return 0.45 + 95 * (1 - power2In(x)); }
+      function byteVy(t) { const x = sat((t - 2.5) / 3.5); return (95 * 2 * x) / 3.5; }
+
+      const tmpPos = new THREE.Vector3(), tmpLook = new THREE.Vector3(), bytePos = new THREE.Vector3();
+
+      function renderWorld(t) {
+        U.uTime.value = t;
+
+        // byte
+        const byteVisible = t >= 2.5 && t < 6.25;
+        bytePos.set(0, byteY(t), 0);
+        byteGroup.visible = byteVisible;
+        if (byteVisible) {
+          const spawn = 0.4 + 0.6 * sat((t - 2.5) / 0.6);
+          const absorb = t >= 6.0 ? 1 - power2In(sat((t - 6.0) / 0.25)) : 1;
+          byteGroup.position.copy(bytePos);
+          byteGroup.scale.setScalar(spawn * absorb);
+          byteGroup.rotation.set(0.35, 0.6 * (t - 2.5), 0.2);
+        }
+
+        // camera
+        let lookW = 0;
+        if (t < 6.6) {
+          const tc = Math.min(t, 6.0);
+          const u = timeToU(S1, tc);
+          tmpPos.copy(S1.pos.getPoint(u));
+          tmpLook.copy(S1.look.getPoint(u));
+          if (t >= 2.5 && t < 6.0) {
+            lookW = 0.8 * sineInOut((t - 2.6) / 1.0) * (1 - sineInOut((t - 5.2) / 0.8));
+            tmpLook.lerp(bytePos, lookW);
+          }
+        } else {
+          const u = timeToU(S2, t);
+          tmpPos.copy(S2.pos.getPoint(u));
+          tmpLook.copy(S2.look.getPoint(u));
+        }
+        // impact shake
+        if (t >= 6.0 && t < 6.55) {
+          const s = t - 6.0, A = 0.35 * Math.exp(-s / 0.12);
+          const oy = A * (Math.sin(2 * Math.PI * 17 * s) * 0.6 + Math.sin(2 * Math.PI * 29 * s + 1.3) * 0.4);
+          const ox = 0.5 * A * (Math.sin(2 * Math.PI * 19 * s + 0.7) * 0.6 + Math.sin(2 * Math.PI * 31 * s + 2.1) * 0.4);
+          tmpPos.x += ox; tmpPos.y += oy; tmpLook.x += ox; tmpLook.y += oy;
+        }
+        camera.position.copy(tmpPos);
+        camera.lookAt(tmpLook);
+        sky.position.copy(camera.position);
+
+        // fog follows the focus as the camera cranes away (keeps the letters legible)
+        const dist = camera.position.length();
+        U.uFogOffset.value = smooth(6.6, 9.6, t) * Math.max(0, dist - 72);
+
+        // trail
+        trail.visible = byteVisible && t < 6.05;
+        if (trail.visible) {
+          const len = clamp(2.5 + byteVy(t) * 0.3, 0.5, 22) * sat((t - 2.5) / 0.3);
+          trail.position.copy(bytePos);
+          trail.scale.set(0.85 * (0.4 + 0.6 * sat((t - 2.5) / 0.6)), len, 1);
+          trail.rotation.set(0, Math.atan2(camera.position.x - bytePos.x, camera.position.z - bytePos.z), 0);
+          trail.material.uniforms.uAlpha.value = t >= 6.0 ? 1 - sat((t - 6.0) / 0.05) : 1;
+        }
+
+        // byte light
+        let li = 0;
+        if (t >= 2.5 && t < 6.0) li = 40 * Math.pow(sat((t - 2.5) / 3.5), 3);
+        else if (t >= 6.0) {
+          const s = t - 6.0;
+          li = s < 0.04 ? 40 + 360 * (s / 0.04) : 18 + 382 * (1 - expoOut(sat((s - 0.04) / 1.16)));
+        }
+        byteLight.intensity = li;
+        byteLight.position.set(0, t < 6.0 ? Math.max(byteY(t), 1.2) : 1.6, 0);
+
+        composer.render();
+      }
+
+      window.__renderWorld = renderWorld;
+      const startT = (window.__timelines && window.__timelines.main) ? window.__timelines.main.time() : (window.__hfThreeTime || 0);
+      renderWorld(typeof window.__hfThreeTime === "number" ? window.__hfThreeTime : startT);
+      if (window.__resolveWorld) window.__resolveWorld();
     </script>
   </body>
 </html>

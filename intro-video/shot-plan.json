@@ -1,0 +1,200 @@
+{
+  "category": "kinetic-type",
+  "title": "THE LANDING",
+  "duration_s": 12.5,
+  "fps": 30,
+  "total_frames": 375,
+  "canvas": { "w": 1920, "h": 1080, "aspect": "16:9", "picture_area": { "aspect": "2.39:1", "letterbox_px": 138, "y0": 138, "y1": 942, "h": 804 } },
+  "style": "Original cinematic title film, no references to existing movies. A real 3D night landscape of thousands of graphite byte-tiles receding into fog under a faint cold horizon. Calm, patient, long-tailed eases; every camera move eases in and out. Lit and filmic, not a HUD: exp2 fog, depth, bloom on the brightest points only (falling byte, impact core, letter tops), subtle grain, vignette, 2.39:1 letterbox. One dominant motif: light arrives from the sky at one point and spreads outward across the tiles (fall, then ring, then the radial rise of the letters). BANNED: HUD readouts, corner brackets, decorative rings, floating decorative particles, lens flares, orbs, snappy/back/elastic eases.",
+  "palette": {
+    "void_ground": "#04070B",
+    "fog": "#070C11",
+    "tile_graphite": "#1A1F25",
+    "tile_graphite_alt": "#232A31",
+    "horizon_glow": "#2A5566",
+    "horizon_band_core": "#9BD9E6",
+    "ice_light": "#CFF6FF",
+    "cyan_accent": "#00E0FF",
+    "letter_top_emissive": "#7FE8FF",
+    "byte_core": "#E9FDFF",
+    "title_ink": "#E6F7FF",
+    "letterbox": "#000000"
+  },
+  "font": "Montserrat",
+  "font_notes": "Welcome title: Montserrat 500, 40px, uppercase, letter-spacing 0.5em, color #E6F7FF at 0.92 opacity. Montserrat is in the HF bundled list, so no @font-face is needed. The 3D letters do not use a font: they are a 5x7 pixel bitmap (A-Z, space, comma) built from the tiles.",
+  "beats": [2.5, 6.0, 6.6, 9.5, 11.8],
+  "beats_frames": [75, 180, 198, 285, 354],
+  "export": "mp4",
+  "asset_needs": [],
+
+  "variables": {
+    "bossName": { "default": "BOSS", "use": "welcome title -> 'WELCOME BACK, {bossName}'" },
+    "titleText": { "default": "THE BYTE HAS LANDED", "use": "3D pixel letters; split at a word boundary into 2 balanced lines: 'THE BYTE' / 'HAS LANDED'" },
+    "welcomeText": { "default": "WELCOME BACK, {bossName}", "use": "DOM title in picture area" }
+  },
+
+  "block": "three-orbiting-cards",
+  "blocks": [
+    { "id": "three-orbiting-cards", "role": "REFERENCE ONLY for the HF-native Three.js pattern: a paused GSAP timeline drives a render(t) that is a pure function of time; deterministic seek. Do NOT keep the cards." },
+    { "id": "grain-overlay", "role": "subtle film grain over the whole frame (inside the letterbox), opacity ~0.06-0.08, monochrome" },
+    { "id": "vignette", "role": "radial vignette, edges to ~0.55 darkness, centered on the picture area" },
+    { "id": "tracking-in", "role": "base for the welcome title's letter-spacing reveal; customize it to be restrained (spacing 0.62em -> 0.5em + fade + 6px blur -> 0), sine.out, 0.9 s" }
+  ],
+  "customize": {
+    "three-orbiting-cards": "Replace the scene entirely with the tile-landscape scene below. Keep only the deterministic render(t) and seek wiring. Import three from an importmap pinned to three@0.181.2 (three + three/addons/ for EffectComposer, RenderPass, UnrealBloomPass, OutputPass).",
+    "grain-overlay": { "opacity": 0.07, "blend": "overlay", "must_be_seek_safe": true },
+    "vignette": { "strength": 0.55, "inner_radius": "55%" },
+    "tracking-in": { "text": "{welcomeText}", "from_letter_spacing": "0.62em", "to_letter_spacing": "0.5em", "from_blur_px": 6, "duration_s": 0.9, "ease": "sine.out" }
+  },
+
+  "hand_authored_gaps": [
+    "3D instanced tile landscape plus radial letter rise (no catalog block; search miss logged with `npx hyperframes feedback`)",
+    "Static 2.39:1 letterbox bars (no catalog block; search miss logged). Two DOM divs, 138px each, #000, top z-index, present from frame 0 with no animation.",
+    "5x7 pixel bitmap font table for A-Z, space and comma, used to pick which tiles rise"
+  ],
+
+  "scene3d": {
+    "renderer": "WebGLRenderer, antialias, preserveDrawingBuffer, ACESFilmic tone mapping, exposure ~1.0, sRGB output. Render at 1920x1080 under the letterbox. Everything (camera, byte, wave, tile heights, lights) is computed from t; no Math.random, no clock, no requestAnimationFrame state. Use a seeded hash(i,j) for per-tile variation.",
+    "units": "1 unit = 1 tile pitch. Tiles are boxes 0.92 x 0.35 x 0.92 (gap 0.08) so the joints read.",
+    "ground_grid": { "cols": 220, "rows": 220, "centered_on": [0, 0, 0], "instances": 48400, "mesh": "one InstancedMesh, MeshStandardMaterial, roughness 0.55-0.85 and metalness 0.2 from hash, color #1A1F25 / #232A31 mixed by hash, plus per-instance emissive via instanceColor or a small onBeforeCompile uniform for the wave and letter-top glow", "micro_variation": "per-tile base height offset 0-0.06 from hash, static" },
+    "fog": { "type": "FogExp2", "color": "#070C11", "density": 0.0105 },
+    "sky_horizon": "Large back-facing sphere or a far plane with a vertical gradient: #04070B at top, #2A5566 at the horizon, a thin brighter band #9BD9E6 at ~6% intensity right at the horizon line, and #04070B below. Static. This is the 'faint light on the horizon'.",
+    "lights": [
+      "Hemisphere light, sky #22404D, ground #04070B, intensity 0.35",
+      "Directional moon-key from far behind the horizon (0, 40, -300), color #CFF6FF, intensity 0.25: rim-lights tile edges toward the camera",
+      "PointLight carried by the byte: color #9BEFFF, distance 45, decay 2. Intensity 0 at t<2.5, eases up to 40 as the byte nears the ground, flash to 120 at t=6.0, then decays (expo) to a steady 18 by t=7.2 and stays (a warm-cold core under the letters)"
+    ],
+    "post": "EffectComposer: RenderPass -> UnrealBloomPass(strength 0.75, radius 0.55, threshold 0.82) -> OutputPass. The threshold keeps bloom on the byte, impact core, wave crest and letter tops only. Grain and vignette are DOM overlays, not passes.",
+    "text_layout": {
+      "lines": ["THE BYTE", "HAS LANDED"],
+      "glyph": "5x7 bitmap, 1 column gap between letters, a 3-column word space, a 3-row line gap",
+      "tiles_per_glyph_pixel": "2x2 tiles",
+      "block_extent_tiles": "about 118 wide x 34 deep, centered on the origin; line 1 toward -Z (far), line 2 toward +Z (near), reading left to right along +X from the final camera",
+      "rise_height": 3.2,
+      "letter_tile_top_emissive": "#7FE8FF at 0.0 before the rise, eased to 0.9 as each tile reaches full height; tile sides stay graphite and are lit by the core point light"
+    }
+  },
+
+  "camera": {
+    "fov_vertical_deg": 32,
+    "interpolation": "Catmull-Rom (centripetal) through the position keys and through the lookAt keys separately. Parameterize time per segment with sine.inOut so every move eases both ways and there is no velocity jump at keys. Allow one continuous spline from 0 to 6.0 and a second from 6.6 to 12.5; 6.0-6.6 holds the 6.0 pose plus shake.",
+    "keys": [
+      { "t": 0.0, "pos": [-38, 3.0, 190], "look": [-14, 3.6, 0], "note": "low glide, horizon in the upper third of the picture area" },
+      { "t": 2.5, "pos": [-33, 3.4, 150], "look": [-8, 4.5, 0] },
+      { "t": 4.2, "pos": [-28, 4.4, 108], "look": "track the byte: lerp(look_ground[0,1,0], bytePos, 0.8)", "note": "tilt up toward the fall" },
+      { "t": 6.0, "pos": [-22, 5.8, 70], "look": [0, 1.0, 0], "note": "tilt back down with the byte; impact happens center-frame, ~45% from the top of the picture area" },
+      { "t": 6.6, "pos": [-21.6, 6.1, 66.6], "look": [0, 1.2, 0], "note": "= spherical about the origin: r 70, elev 5 deg, az -18 deg" },
+      { "t": 8.2, "pos": "spherical r 120, elev 26 deg, az -8 deg", "look": [0, 1.2, -2] },
+      { "t": 9.6, "pos": "spherical r 175, elev 44 deg, az +4 deg", "look": [0, 0, -4], "note": "front-high readable angle; the letter block spans ~70% of picture width and sits in the upper 60% of the picture area, leaving room for the welcome title below" },
+      { "t": 12.5, "pos": "spherical r 168, elev 45 deg, az +6 deg", "look": [0, 0, -4], "note": "barely perceptible continuing drift so the hold is alive" }
+    ],
+    "byte_tracking": "For 2.5-6.0, look = lerp(spline_look(t), bytePos(t), w(t)), with w eased 0->0.8 over 2.6-3.6 and 0.8->0 over 5.2-6.0 (sine.inOut). This is the slow tilt up and follow.",
+    "impact_shake": "t in [6.0, 6.55]: offset = A*exp(-(t-6.0)/0.12) * (sin(2pi*17*(t-6))*0.6 + sin(2pi*29*(t-6)+1.3)*0.4) on y, and 0.5x that with different phases on x. A = 0.35 units. Deterministic, no random."
+  },
+
+  "byte": {
+    "mesh": "Cube 0.9 units, MeshBasicMaterial #E9FDFF (well above the bloom threshold) with a slightly larger additive shell #7FE8FF at 0.35 for halation",
+    "path": "x=0, z=0. Hidden before 2.5. y(t) = 0.45 + 95*(1 - easeInQuad((t-2.5)/3.5)) for t in [2.5, 6.0]. Spawns at 2.5 as a pinpoint (scale 0.4 -> 1 over 0.6 s), visible far above the horizon line in the first frame it appears.",
+    "trail": "A camera-facing additive ribbon/quad above the byte, length = clamp(|vy|*0.22, 0.5, 22) units, gradient #CFF6FF -> transparent, width 0.5. Deterministic from t. No particles.",
+    "spin": "slow rotation y = 0.6*(t-2.5) rad",
+    "on_impact": "At 6.0 the byte scales to 0 over 0.25 s (power2.in) as if absorbed into the ground; the point light flash takes over."
+  },
+
+  "impact_wave": {
+    "start_t": 6.0,
+    "radius": "r(t) = 46*(t-6.0)*(1 - 0.18*(t-6.0)) units (slowly decelerating)",
+    "band": "gaussian around r, sigma 2.6 units",
+    "tile_lift": "lift = 0.9 * band * exp(-(t-6.0)/1.4), added to tile y. Tiles settle back as the band passes (the gaussian provides it).",
+    "light": "emissive on the tile tops = #7FE8FF * 1.1 * band * exp(-(t-6.0)/1.1) * fogDistanceFade. The crest blooms near the center and dims outward.",
+    "end": "fades out by ~8.2 at r~100; the fog swallows the rest"
+  },
+
+  "letter_rise": {
+    "window": [6.6, 9.4],
+    "order": "Radial from the impact point, so it is the same motif as the wave: delay_i = 6.6 + 0.9*smoothstep(0, 62, dist_i), plus a hash jitter of 0-0.12 s",
+    "per_tile": "height 0 -> 3.2 over 1.3 s with expo.out (long tail); the emissive top fades 0 -> 0.9 over the same span (sine.out). Non-letter tiles inside the block also rise 0.15 then settle (a breath), so the area reads as one surface responding.",
+    "all_settled_by": 9.4,
+    "after": "From 9.5 the letter tops get a faint slow 'breath' of +-4% emissive at 0.25 Hz, sine. No other motion."
+  },
+
+  "dom_layers": {
+    "letterbox": "two #000 divs 1920x138, top and bottom, highest z-index, static for the full 12.5 s",
+    "welcome_title": {
+      "text": "{welcomeText}",
+      "position": "centered horizontally; baseline at y = 858 (inside the picture area, below the letter block with clear space)",
+      "entry": "t 9.6 -> 10.5: opacity 0 -> 0.92, letter-spacing 0.62em -> 0.5em, blur 6px -> 0, sine.out (tracking-in, customized)",
+      "hold": "fully readable from 10.2 to 12.0 (>= 1.8 s fully settled; >= 2.4 s legible including the tail of the entry)",
+      "exit": "no separate exit; it goes down with the global fade to black"
+    },
+    "fade_to_black": "a full-frame #000 div below the letterbox: opacity 0 -> 1 over 11.8 -> 12.5, power1.in, so the last frame (f374) is near-black",
+    "fade_from_black": "the same div goes 1 -> 0 over 0.0 -> 0.8 (sine.out) so the film opens out of the unlock screen",
+    "grain": "grain-overlay over the picture area",
+    "vignette": "vignette over the picture area"
+  },
+
+  "audio": {
+    "measured_note": "Envelopes were measured with ffmpeg and do NOT match the library descriptions. sfx_001: silent-ish to ~1.4 s, builds to full by ~3.0 s, plateau to ~4.1 s, hard cut at 4.15 s, then a -48 dB tail. Its crest/cut is at 4.15 s, not at 10 s. sfx_002: loud from 0.05 s and sustained at about -2 dB RMS until 2.4 s, so it is a long bass body rather than a short hit and needs ducking before the voice. sfx_004: builds to its peak 2.2-2.6 s, plateau to ~3.2 s, gone by ~4.3 s.",
+    "voice_window": "The app plays the spoken line separately from ~6.3 s to ~10.3 s. Every SFX gain after 6.3 s stays <= 0.32.",
+    "tracks": [
+      { "id": "sfx-riser", "src": ".media/audio/sfx/sfx_001.mp3", "data-start": 2.0, "data-media-start": 0.15, "data-duration": 4.6, "data-volume": 0.8, "data-fade-in": 0.4, "data-fade-out": 0.3, "purpose": "the fall. The 4.15 s cut lands on 2.0 + (4.15 - 0.15) = 6.0 = impact. The plateau (4.85-5.95) is under the last second of the fall. The post-cut tail is at -48 dB, which is safe under the voice." },
+      { "id": "sfx-impact", "src": ".media/audio/sfx/sfx_002.mp3", "data-start": 5.97, "data-media-start": 0, "data-duration": 2.6, "data-volume": 0.9, "data-fade-out": 0.8, "data-automation": "volume: 0.9 @5.97, 0.9 @6.12, 0.30 @6.40, 0.30 @8.57 (ducked under the voice; use the /media-use automation syntax)", "purpose": "impact, 1 frame anticipated" },
+      { "id": "sfx-rise-whoosh", "src": ".media/audio/sfx/sfx_004.mp3", "data-start": 6.6, "data-media-start": 1.0, "data-duration": 3.4, "data-volume": 0.3, "data-fade-out": 0.5, "purpose": "the radial rise and the crane. The peak (media ~2.4) lands at ~8.0, mid-crane, and has decayed by ~9.9." },
+      { "id": "sfx-title-sparkle", "src": ".media/audio/sfx/sfx_003.mp3", "data-start": 9.55, "data-media-start": 0, "data-duration": 1.8, "data-volume": 0.22, "data-fade-out": 0.4, "purpose": "the welcome title appears" }
+    ],
+    "unused": ["sfx_005 (0.4 s click; does not fit the tone)"],
+    "silence": "0-2.0 s has no sound (the 'silence before'); 11.0-12.5 s is silent apart from tails."
+  },
+
+  "content": {
+    "scenes": [
+      {
+        "id": "s1-silence-before", "start": 0.0, "end": 2.5, "tag": "Hook",
+        "text": "", "emphasis_words": [], "emotion": "hush, vast, anticipation",
+        "motion": "Fade up from black (0-0.8). The camera glides low and slow over an endless field of graphite tiles into the fog; a faint cold band of light on the horizon. Camera keys 0.0 -> 2.5 only. Nothing else moves.",
+        "sound": "none",
+        "beats": []
+      },
+      {
+        "id": "s2-the-fall", "start": 2.5, "end": 6.0, "tag": "Build",
+        "text": "", "emphasis_words": [], "emotion": "wonder, building tension",
+        "motion": "A pinpoint of light appears high above the horizon and becomes a glowing cube falling with a light trail (easeInQuad, so it accelerates). The camera keeps dollying in and tilts up to follow it, then back down. Its point light starts to rake across the nearby tiles as it gets close.",
+        "sound": "sfx-riser (start 2.0, trim 0.15, 0.8). It builds through the fall and cuts dead on 6.0.",
+        "beats": [2.5]
+      },
+      {
+        "id": "s3-impact", "start": 6.0, "end": 6.6, "tag": "Punch",
+        "text": "", "emphasis_words": [], "emotion": "weight, release",
+        "motion": "The byte is absorbed into the ground; the point light flashes (bloom). A 0.55 s deterministic decaying camera shake. A single ring of light and lift ripples outward across the tiles and decelerates into the fog.",
+        "sound": "sfx-impact at 5.97 (0.9, ducked to 0.30 by 6.4)",
+        "beats": [6.0]
+      },
+      {
+        "id": "s4-the-rise", "start": 6.6, "end": 9.5, "tag": "Build -> Reveal",
+        "text": "THE BYTE HAS LANDED", "emphasis_words": ["LANDED"], "emotion": "awe, revelation",
+        "motion": "Tiles rise radially outward from the impact point (expo.out, long tail) into giant pixel letters 'THE BYTE / HAS LANDED' whose tops glow ice-cyan. At the same time the camera cranes up and slightly around (az -18 to +4 deg, elev 5 to 44 deg, r 70 to 175, sine.inOut) from a low silhouette view to a readable front-high angle. Fully readable from ~9.2.",
+        "sound": "sfx-rise-whoosh (start 6.6, trim 1.0, 0.3), peaking ~8.0",
+        "beats": [6.6]
+      },
+      {
+        "id": "s5-welcome", "start": 9.5, "end": 12.5, "tag": "Resolve",
+        "text": "WELCOME BACK, BOSS", "emphasis_words": ["BOSS"], "emotion": "quiet, personal, settled",
+        "motion": "Stillness: a near-imperceptible camera drift and a faint breath on the letter tops. A restrained movie title, Montserrat 500 40px tracked 0.5em, resolves in below the letters inside the picture area (9.6-10.5, tracking-in + fade + de-blur, sine.out) and holds. Fade to black 11.8-12.5 (power1.in). No emphasis styling on BOSS; the restraint is the point.",
+        "sound": "sfx-title-sparkle at 9.55 (0.22)",
+        "beats": [9.5, 11.8]
+      }
+    ]
+  },
+
+  "qa_frames": {
+    "f30 (1.0s)": "tiles recede into fog with real depth; horizon band visible; letterbox exact 138px; no HUD",
+    "f120 (4.0s)": "the falling byte is clearly visible with its trail; the camera has tilted up; bloom only on the byte",
+    "f172 (5.73s)": "point light rakes the tiles near the landing spot",
+    "f183 (6.1s)": "flash + ring wave visible, shake offset non-zero; re-seeking f183 twice gives an identical frame",
+    "f230 (7.67s)": "letters partly risen radially; camera mid-crane",
+    "f285 (9.5s)": "'THE BYTE / HAS LANDED' fully readable, ~70% of picture width",
+    "f330 (11.0s)": "'WELCOME BACK, BOSS' crisp and readable inside the picture area, not overlapping the letters",
+    "f374 (12.47s)": "near-black"
+  },
+
+  "brief": "A hushed, original title film that plays as the owner's laptop opens. Out of black we glide low over a vast dark landscape of byte-tiles disappearing into fog under a faint cold horizon. A single point of light falls from the sky, trailing light, and the camera lifts its gaze to follow it down. It lands with a deep hit and a slight shake, and a ring of light ripples outward across the tiles. Then, spreading from the same point, the tiles rise into giant glowing pixel letters, THE BYTE HAS LANDED, as the camera cranes up and around to read them. In the quiet that follows, a restrained, wide-tracked WELCOME BACK, BOSS resolves inside the letterbox and holds before a gentle fade to black. The single dominant motion idea is light arriving at one point and spreading outward: fall, ring, rise."
+}
