@@ -25,8 +25,8 @@ if [ ! -d "$M/vosk" ]; then
   (cd "$M" && unzip -q vosk.zip && rm vosk.zip && mv -T vosk-model-small-en-us-0.15 vosk)
 fi
 
-cp "$SRC/assets/intro.mp4" "$DATA/intro.mp4"
-cp "$SRC/assets/intro.wav" "$DATA/intro.wav"
+# keep a personal intro (e.g. re-rendered with your own name) if one is already installed
+[ -e "$DATA/intro.mp4" ] || { cp "$SRC/assets/intro.mp4" "$DATA/intro.mp4"; cp "$SRC/assets/intro.wav" "$DATA/intro.wav"; }
 
 echo "==> Command: ~/.local/bin/$APP"
 mkdir -p "$HOME/.local/bin"
