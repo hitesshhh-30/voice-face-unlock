@@ -19,3 +19,9 @@ intro-video/renders/
 intro-video/.hyperframes/
 intro-video/node_modules/
 !assets/intro.wav
+# HyperFrames caches and raw sound files (Pixabay license: ship only inside the rendered video)
+intro-video/.thumbnails/
+intro-video/.waveform-cache/
+intro-video/.media/
+intro-video/assets/sfx/
+intro-video/context.log
